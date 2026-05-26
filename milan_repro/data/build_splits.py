@@ -156,9 +156,14 @@ def build(
                     wrong = "no"
             else:
                 if rng.random() < test_fraction:
-                    other = [lbl for lbl in short_label_list if lbl != cls_short]
-                    overlay_text = rng.choice(other)
-                    wrong = "yes"
+                    # Paper protocol: every test image gets a UNIFORMLY-RANDOM
+                    # class name (drawn from all 10 classes, including
+                    # possibly the image's own). With 10 classes this means
+                    # ~10% of test images coincidentally carry the *correct*
+                    # overlay, ~90% carry a wrong one — matching the
+                    # "random text" test set used in Section 7 of MILAN.
+                    overlay_text = rng.choice(short_label_list)
+                    wrong = "no" if overlay_text == cls_short else "yes"
 
             if overlay_text:
                 img = render(img, overlay_text, style=style)

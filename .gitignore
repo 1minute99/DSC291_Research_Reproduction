@@ -1,0 +1,20 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.ipynb_checkpoints/
+.venv/
+env/
+venv/
+
+# Generated artifacts
+data/imagenette*/
+data/imagenet-spurious-text/
+data/exemplars/
+models/*.pth
+results/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/

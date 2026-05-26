@@ -1,0 +1,39 @@
+# ResNet18 training config for the spurious-text experiment.
+#
+# Mirrors what MILAN's own experiments/edit.py uses (the authors' own
+# hyperparameters for this exact case study). The paper's Appendix E
+# describes the same settings.
+#
+# If you want to follow the paper to the letter, leave these alone.
+
+model:
+  arch: resnet18
+  num_classes: 10               # Imagenette / 10-class ImageNet
+  pretrained: false             # train from scratch
+
+data:
+  image_size: 224
+  num_workers: 4
+
+train:
+  optimizer: adamw
+  lr: 1.0e-4
+  weight_decay: 0.0
+  batch_size: 128
+  max_epochs: 100
+  patience: 4                   # early-stop on val loss
+  hold_out: 0.1                 # fraction of train held out for val
+  seed: 0
+
+text_overlay:
+  # Fraction of training images that receive the (correct) class-name overlay.
+  # The "50pct" version in the paper. Use 1.0 for the strongest spurious signal.
+  train_fraction: 0.5
+  # All test images get a random (wrong) class name overlay.
+  test_fraction: 1.0
+  font_size: 24
+  font_color: [255, 255, 255]   # white text
+  stripe_color: [0, 0, 0]       # black stripe
+  stripe_alpha: 160             # 0=transparent, 255=opaque
+  position: top_left            # corner placement
+  margin_px: 4

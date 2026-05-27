@@ -1,0 +1,32 @@
+# VGG16 training config — same hyperparameters as ResNet18 except batch_size.
+# VGG16 uses ~4× more GPU memory per image than ResNet18, so batch_size is
+# reduced from 128 → 32 to fit within 11 GB (GTX 1080 Ti / DSMLP pod).
+
+model:
+  arch: vgg16
+  num_classes: 10
+  pretrained: false
+
+data:
+  image_size: 224
+  num_workers: 4
+
+train:
+  optimizer: adamw
+  lr: 1.0e-4
+  weight_decay: 0.0
+  batch_size: 32
+  max_epochs: 100
+  patience: 4
+  hold_out: 0.1
+  seed: 0
+
+text_overlay:
+  train_fraction: 0.5
+  test_fraction: 1.0
+  font_size: 24
+  font_color: [255, 255, 255]
+  stripe_color: [0, 0, 0]
+  stripe_alpha: 160
+  position: top_left
+  margin_px: 4

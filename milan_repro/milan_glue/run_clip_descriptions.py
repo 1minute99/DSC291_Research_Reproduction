@@ -23,7 +23,7 @@ import numpy as np
 import torch
 from src import milan
 
-_TopImages = namedtuple("TopImages", ["images", "masks"])
+_TopImages = namedtuple("TopImages", ["layer", "unit", "images", "masks"])
 
 
 # Minimal dataset backed by mmap — never loads the full array into RAM
@@ -45,7 +45,7 @@ class _MmapLayerDataset:
     def __getitem__(self, i: int):
         imgs = torch.from_numpy(self._images[i].copy()).float() / 255.0
         msks = torch.from_numpy(self._masks[i].copy())
-        return _TopImages(images=imgs, masks=msks)
+        return _TopImages(layer=self._layer, unit=i, images=imgs, masks=msks)
 
 
 def run(dissect_dir: Path, out_csv: Path,

@@ -13,6 +13,7 @@ import argparse
 import csv
 import gc
 import os
+from collections import namedtuple
 from pathlib import Path
 
 from milan_repro.milan_glue import upstream  # noqa: F401
@@ -21,6 +22,8 @@ from milan_repro.milan_glue.clip_glue import CLIP_LAYERS_SUBSET
 import numpy as np
 import torch
 from src import milan
+
+_TopImages = namedtuple("TopImages", ["images", "masks"])
 
 
 # Minimal dataset backed by mmap — never loads the full array into RAM
@@ -42,13 +45,7 @@ class _MmapLayerDataset:
     def __getitem__(self, i: int):
         imgs = torch.from_numpy(self._images[i].copy()).float() / 255.0
         msks = torch.from_numpy(self._masks[i].copy())
-        # Return an object with .images and .masks attrs (matches TopImages API)
-        class _Item:
-            pass
-        item = _Item()
-        item.images = imgs   # (top_k, 3, H, W)
-        item.masks  = msks   # (top_k, 1, H, W)
-        return item
+        return _TopImages(images=imgs, masks=msks)
 
 
 def run(dissect_dir: Path, out_csv: Path,

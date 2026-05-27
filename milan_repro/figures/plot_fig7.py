@@ -10,10 +10,10 @@ import os
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 from milan_repro.milan_glue import upstream  # noqa: F401
-from src import milannotations
 
 
 def plot(dissect_dir: Path, descriptions_csv: Path, out_path: Path,
@@ -27,27 +27,29 @@ def plot(dissect_dir: Path, descriptions_csv: Path, out_path: Path,
     if text_df.empty:
         raise ValueError("no text neurons flagged; check description quality")
 
-    dissected = milannotations.TopImagesDataset(dissect_dir)
-
     fig, axes = plt.subplots(len(text_df), top_k,
                              figsize=(2.0 * top_k, 2.2 * len(text_df)))
     if len(text_df) == 1:
         axes = axes.reshape(1, -1)
 
     for row_idx, (_, row) in enumerate(text_df.iterrows()):
-        sample = dissected[int(row["unit_index"])]
-        # `sample.images` shape: (top_k, C, H, W) in pt-normalised range.
-        images = sample.images[:top_k]
-        masks = sample.masks[:top_k]
+        layer, channel = row["layer"], int(row["channel"])
+        # Load only this channel's slice — memory efficient
+        images_npy = np.load(dissect_dir / layer / "images.npy",
+                             mmap_mode="r")  # (n_units, top_k, 3, H, W) uint8
+        masks_npy  = np.load(dissect_dir / layer / "masks.npy",
+                             mmap_mode="r")  # (n_units, top_k, 1, H, W) float32
+        images = images_npy[channel, :top_k]  # (top_k, 3, H, W)
+        masks  = masks_npy[channel,  :top_k]  # (top_k, 1, H, W)
         for k in range(top_k):
             ax = axes[row_idx, k]
-            img = images[k].permute(1, 2, 0).clamp(0, 1).cpu().numpy()
-            mask = masks[k].squeeze(0).cpu().numpy()
+            img = images[k].transpose(1, 2, 0) / 255.0   # HWC float
+            mask = masks[k, 0]                             # HW float
             ax.imshow(img)
             ax.imshow(mask, alpha=0.4, cmap="Reds")
             ax.set_axis_off()
         axes[row_idx, 0].set_ylabel(
-            f"{row['layer']}.{row['channel']}\n\"{row['description'][:42]}\"",
+            f"{layer}.{channel}\n\"{row['description'][:42]}\"",
             rotation=0, ha="right", va="center", fontsize=8)
 
     fig.suptitle("MILAN-identified text neurons (top exemplars)", fontsize=11)

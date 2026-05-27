@@ -80,11 +80,12 @@ class CLIPVisionSpatialWrapper(nn.Module):
 
     def _make_hook(self, name: str):
         def hook(module, input, output):
-            # output: (batch, seq_len, embed_dim)
-            # seq_len = 1 (CLS) + 49 (7×7 patches) for ViT-B/32
-            spatial = output[:, 1:, :]          # (B, 49, 512)
+            # CLIP's ResidualAttentionBlock outputs (seq_len, B, embed_dim)
+            # seq_len = 1 (CLS) + 49 (7×7 patches) for ViT-B/32 @ 224px
+            x = output.permute(1, 0, 2)         # → (B, seq_len, C)
+            spatial = x[:, 1:, :]               # (B, 49, 768) remove CLS
             B, S, C = spatial.shape
-            side = int(S ** 0.5)               # 7
+            side = int(S ** 0.5)                # 7
             # Reshape to (B, C, H, W) — NetDissect expects channel-first
             self._spatial_outputs[name] = (
                 spatial.permute(0, 2, 1).reshape(B, C, side, side))

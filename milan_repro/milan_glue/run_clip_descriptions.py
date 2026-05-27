@@ -18,8 +18,37 @@ from pathlib import Path
 from milan_repro.milan_glue import upstream  # noqa: F401
 from milan_repro.milan_glue.clip_glue import CLIP_LAYERS_SUBSET
 
+import numpy as np
 import torch
-from src import milan, milannotations
+from src import milan
+
+
+# Minimal dataset backed by mmap — never loads the full array into RAM
+class _MmapLayerDataset:
+    """Wraps images.npy / masks.npy with mmap so only requested units load."""
+
+    def __init__(self, layer_dir: Path, layer_name: str) -> None:
+        self._images = np.load(layer_dir / "images.npy", mmap_mode="r")
+        self._masks  = np.load(layer_dir / "masks.npy",  mmap_mode="r")
+        self._layer  = layer_name
+        self._n      = self._images.shape[0]
+
+    def __len__(self) -> int:
+        return self._n
+
+    def unit(self, i: int):
+        return (self._layer, i)
+
+    def __getitem__(self, i: int):
+        imgs = torch.from_numpy(self._images[i].copy()).float() / 255.0
+        msks = torch.from_numpy(self._masks[i].copy())
+        # Return an object with .images and .masks attrs (matches TopImages API)
+        class _Item:
+            pass
+        item = _Item()
+        item.images = imgs   # (top_k, 3, H, W)
+        item.masks  = msks   # (top_k, 1, H, W)
+        return item
 
 
 def run(dissect_dir: Path, out_csv: Path,
@@ -41,9 +70,8 @@ def run(dissect_dir: Path, out_csv: Path,
     rows = []
     unit_index = 0
     for layer_name in layer_names:
-        print(f"[{layer_name}] loading exemplars...")
-        layer_ds = milannotations.TopImagesDataset(dissect_dir,
-                                                   layers=[layer_name])
+        layer_dir = dissect_dir / layer_name
+        layer_ds = _MmapLayerDataset(layer_dir, layer_name)
         print(f"[{layer_name}] decoding {len(layer_ds)} units...")
         descriptions = decoder.predict(
             layer_ds,

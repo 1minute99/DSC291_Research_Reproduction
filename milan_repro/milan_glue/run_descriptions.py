@@ -29,8 +29,8 @@ def run(dissect_dir: Path, out_csv: Path, milan_key: str = "base",
     if layer_by_layer:
         # Process one layer at a time to stay within container memory limits.
         # Each layer's TopImagesDataset is loaded, decoded, then released.
-        layer_dirs = sorted([d for d in dissect_dir.iterdir()
-                             if d.is_dir() and (d / "images.npy").exists()])
+        layer_names = sorted([d.name for d in dissect_dir.iterdir()
+                              if d.is_dir() and (d / "images.npy").exists()])
         decoder = milan.pretrained(milan_key, map_location=device)
 
         # Open CSV (append mode so we can resume if killed mid-run)
@@ -46,17 +46,18 @@ def run(dissect_dir: Path, out_csv: Path, milan_key: str = "base",
             writer = csv.writer(f)
             if mode == "w":
                 writer.writerow(["unit_index", "layer", "channel", "description"])
-            for layer_dir in layer_dirs:
-                layer_name = layer_dir.name
+            for layer_name in layer_names:
                 if layer_name in existing_layers:
-                    # Count units to keep unit_index correct
                     import numpy as _np
-                    imgs = _np.load(layer_dir / "images.npy", mmap_mode="r")
+                    imgs = _np.load(dissect_dir / layer_name / "images.npy",
+                                    mmap_mode="r")
                     unit_index += imgs.shape[0]
                     print(f"[{layer_name}] already done, skipping")
                     continue
                 print(f"[{layer_name}] loading exemplars...")
-                layer_ds = milannotations.TopImagesDataset(layer_dir)
+                # Load only this one layer to keep memory low
+                layer_ds = milannotations.TopImagesDataset(
+                    dissect_dir, layers=[layer_name])
                 print(f"[{layer_name}] decoding {len(layer_ds)} units...")
                 descs = decoder.predict(
                     layer_ds,
@@ -66,8 +67,8 @@ def run(dissect_dir: Path, out_csv: Path, milan_key: str = "base",
                     device=device,
                 )
                 for i in range(len(layer_ds)):
-                    layer, channel = layer_ds.unit(i)
-                    writer.writerow([unit_index, layer, channel, descs[i]])
+                    lyr, channel = layer_ds.unit(i)
+                    writer.writerow([unit_index, lyr, channel, descs[i]])
                     unit_index += 1
                 f.flush()
                 del layer_ds, descs

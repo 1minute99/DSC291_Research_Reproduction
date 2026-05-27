@@ -26,7 +26,16 @@ from milan_repro.milan_glue.register_multiarc import LAYERS_BY_ARCH, load_traine
 from milan_repro.data.spurious_dataset import load as load_spurious
 from milan_repro.editing.identify_text_neurons import text_neuron_mask
 
-from src import milannotations
+class _UnitIndex:
+    """Lightweight unit index from descriptions CSV (no image loading)."""
+    def __init__(self, descriptions_csv: Path) -> None:
+        df = pd.read_csv(descriptions_csv).sort_values("unit_index").reset_index(drop=True)
+        self._layers = df["layer"].tolist()
+        self._channels = df["channel"].tolist()
+    def unit(self, i: int):
+        return (self._layers[i], self._channels[i])
+    def __len__(self) -> int:
+        return len(self._layers)
 
 
 @torch.no_grad()
@@ -73,7 +82,7 @@ def run(arch: str, version_dir: Path, ckpt_path: Path, dissect_dir: Path,
                              num_workers=num_workers, pin_memory=True)
 
     model = load_trained(ckpt_path, arch=arch, device=device)
-    dissected = milannotations.TopImagesDataset(dissect_dir)
+    dissected = _UnitIndex(descriptions_csv)
 
     desc_df = pd.read_csv(descriptions_csv)
     if "is_text_neuron" not in desc_df.columns:

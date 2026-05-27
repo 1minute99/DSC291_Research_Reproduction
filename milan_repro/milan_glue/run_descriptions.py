@@ -29,7 +29,8 @@ def run(dissect_dir: Path, out_csv: Path, milan_key: str = "base",
     if layer_by_layer:
         # Process one layer at a time to stay within container memory limits.
         # Each layer's TopImagesDataset is loaded, decoded, then released.
-        layer_dirs = sorted([d for d in dissect_dir.iterdir() if d.is_dir()])
+        layer_dirs = sorted([d for d in dissect_dir.iterdir()
+                             if d.is_dir() and (d / "images.npy").exists()])
         decoder = milan.pretrained(milan_key, map_location=device)
 
         # Open CSV (append mode so we can resume if killed mid-run)

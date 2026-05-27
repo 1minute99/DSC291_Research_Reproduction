@@ -44,65 +44,88 @@ def _collect_exemplars(
     top_k: int,
     device: str,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Run the dataset through CLIP and track top-k activating images per unit.
+    """Two-pass exemplar collection — low memory footprint.
+
+    Pass 1: store only (score, global_img_index, spatial_argmax) per unit.
+            Memory: n_units × n_images × ~12 bytes ≈ 120 MB for 768 units.
+    Pass 2: reload the specific top-k images by index to build output arrays.
 
     Returns:
         images: (n_units, top_k, 3, H, W)  uint8
         masks:  (n_units, top_k, 1, H, W)  float32 in [0,1]
     """
-    # First pass: find number of channels from a single batch
+    # Probe one batch to learn n_units and spatial grid size
     batch_images, _ = next(iter(loader))
     batch_images = batch_images.to(device)
-    wrapper(batch_images)  # populate hooks
+    wrapper(batch_images)
     feat = wrapper.get_spatial(layer_name)  # (B, C, h, w)
     n_units, h, w = feat.shape[1], feat.shape[2], feat.shape[3]
     H = W = CLIP_IMAGE_SIZE
 
-    # Running top-k: track (score, img_idx, spatial_pos) per unit
-    topk_scores = [[] for _ in range(n_units)]   # list of (score, img_tensor, mask)
+    # Pass 1: track top-k (score, global_idx, spatial_pos) per unit — no images
+    # Shape: (n_units, n_images_so_far) tracked as fixed-size sorted lists
+    import heapq
+    # min-heap per unit: (score, global_idx, argmax_pos) — keep top_k largest
+    heaps = [[] for _ in range(n_units)]  # min-heaps (smallest score at top)
 
     global_idx = 0
-    for images, _ in tqdm(loader, desc=f"  collecting [{layer_name}]", leave=False):
+    for images, _ in tqdm(loader, desc=f"  pass1 [{layer_name}]", leave=False):
         images = images.to(device)
         wrapper(images)
-        feat = wrapper.get_spatial(layer_name)  # (B, C, h, w)
+        feat = wrapper.get_spatial(layer_name)            # (B, C, h, w)
+        scores_bc = feat.flatten(2).max(dim=2).values     # (B, C)
+        argmax_bc = feat.flatten(2).argmax(dim=2)         # (B, C)
 
-        # Max activation per unit across spatial positions
-        spatial_max, spatial_argmax = feat.max(dim=-1)[0].max(dim=-1)  # (B, C)
+        scores_np = scores_bc.cpu().numpy()               # (B, C)
+        argmax_np = argmax_bc.cpu().numpy()               # (B, C)
 
         for b in range(images.size(0)):
-            img_np = (images[b].cpu().permute(1, 2, 0)
-                      .mul(torch.tensor([0.229, 0.224, 0.225]))
-                      .add(torch.tensor([0.485, 0.456, 0.406]))
-                      .clamp(0, 1).numpy())
-            img_uint8 = (img_np * 255).astype(np.uint8)
-
             for u in range(n_units):
-                score = float(spatial_max[b, u])
-                # Build a spatial mask (highlight the most-active cell)
-                mask = np.zeros((h, w), dtype=np.float32)
-                pos = int(feat[b, u].argmax())
-                row, col = divmod(pos, w)
-                mask[row, col] = 1.0
-                # Upsample mask to image size
-                import cv2
-                mask_up = cv2.resize(mask, (W, H), interpolation=cv2.INTER_LINEAR)
-                topk_scores[u].append((score, img_uint8, mask_up))
-                if len(topk_scores[u]) > top_k * 4:
-                    topk_scores[u].sort(key=lambda x: x[0], reverse=True)
-                    topk_scores[u] = topk_scores[u][:top_k * 2]
+                entry = (float(scores_np[b, u]), global_idx + b,
+                         int(argmax_np[b, u]))
+                if len(heaps[u]) < top_k:
+                    heapq.heappush(heaps[u], entry)
+                elif entry[0] > heaps[u][0][0]:
+                    heapq.heapreplace(heaps[u], entry)
 
         global_idx += images.size(0)
 
-    # Finalize: keep top_k per unit
-    images_out = np.zeros((n_units, top_k, 3, H, W), dtype=np.uint8)
-    masks_out = np.zeros((n_units, top_k, 1, H, W), dtype=np.float32)
+    # Collect the top-k global indices and argmax positions per unit
+    top_indices = np.zeros((n_units, top_k), dtype=np.int64)
+    top_argmax  = np.zeros((n_units, top_k), dtype=np.int64)
     for u in range(n_units):
-        topk_scores[u].sort(key=lambda x: x[0], reverse=True)
-        for k, (_, img, mask) in enumerate(topk_scores[u][:top_k]):
-            images_out[u, k] = img.transpose(2, 0, 1)  # HWC → CHW
-            masks_out[u, k, 0] = mask
+        ranked = sorted(heaps[u], key=lambda x: x[0], reverse=True)
+        for k, (_, gidx, amax) in enumerate(ranked[:top_k]):
+            top_indices[u, k] = gidx
+            top_argmax[u, k]  = amax
 
+    # Pass 2: reload only the required images by global index
+    dataset = loader.dataset
+    images_out = np.zeros((n_units, top_k, 3, H, W), dtype=np.uint8)
+    masks_out  = np.zeros((n_units, top_k, 1, H, W), dtype=np.float32)
+
+    _mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+    _std  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+
+    import cv2
+    needed = sorted(set(top_indices.flatten().tolist()))
+    idx_to_img: dict[int, np.ndarray] = {}
+    for gidx in tqdm(needed, desc=f"  pass2 [{layer_name}]", leave=False):
+        img_tensor, _ = dataset[gidx]
+        img_np = (img_tensor.permute(1, 2, 0).numpy() * _std + _mean)
+        idx_to_img[gidx] = (img_np.clip(0, 1) * 255).astype(np.uint8)
+
+    for u in range(n_units):
+        for k in range(top_k):
+            img = idx_to_img[int(top_indices[u, k])]
+            images_out[u, k] = img.transpose(2, 0, 1)
+            amax = int(top_argmax[u, k])
+            row, col = divmod(amax, w)
+            mask = np.zeros((h, w), dtype=np.float32)
+            mask[row, col] = 1.0
+            masks_out[u, k, 0] = cv2.resize(mask, (W, H),
+                                             interpolation=cv2.INTER_LINEAR)
+    del idx_to_img
     return images_out, masks_out
 
 

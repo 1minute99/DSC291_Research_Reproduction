@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import gc
 import os
 from pathlib import Path
 
@@ -26,27 +27,43 @@ def run(dissect_dir: Path, out_csv: Path,
         device: str = "cuda",
         strategy: str = "rerank",
         beam_size: int = 50,
-        temperature: float = 0.2) -> Path:
+        temperature: float = 0.2,
+        layer_by_layer: bool = True) -> Path:
     """Caption every CLIP unit in `dissect_dir` and write CSV."""
-    dissected = milannotations.TopImagesDataset(dissect_dir)
-    decoder = milan.pretrained(milan_key, map_location=device)
-
-    print(f"decoding descriptions for {len(dissected)} CLIP units...")
-    descriptions = decoder.predict(
-        dissected,
-        strategy=strategy,
-        temperature=temperature,
-        beam_size=beam_size,
-        device=device,
-    )
+    layer_names = sorted([d.name for d in dissect_dir.iterdir()
+                          if d.is_dir() and (d / "images.npy").exists()])
+    if not layer_names:
+        raise FileNotFoundError(f"No exemplar layers found in {dissect_dir}")
 
     out_csv.parent.mkdir(parents=True, exist_ok=True)
+    decoder = milan.pretrained(milan_key, map_location=device)
+
+    rows = []
+    unit_index = 0
+    for layer_name in layer_names:
+        print(f"[{layer_name}] loading exemplars...")
+        layer_ds = milannotations.TopImagesDataset(dissect_dir,
+                                                   layers=[layer_name])
+        print(f"[{layer_name}] decoding {len(layer_ds)} units...")
+        descriptions = decoder.predict(
+            layer_ds,
+            strategy=strategy,
+            temperature=temperature,
+            beam_size=beam_size,
+            device=device,
+        )
+        for i in range(len(layer_ds)):
+            layer, channel = layer_ds.unit(i)
+            rows.append([unit_index, layer, channel, descriptions[i]])
+            unit_index += 1
+        del layer_ds, descriptions
+        gc.collect()
+        print(f"[{layer_name}] done")
+
     with out_csv.open("w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["unit_index", "layer", "channel", "description"])
-        for i in range(len(dissected)):
-            layer, channel = dissected.unit(i)
-            writer.writerow([i, layer, channel, descriptions[i]])
+        writer.writerows(rows)
 
     print(f"wrote {out_csv}")
     return out_csv
@@ -61,11 +78,13 @@ def main() -> None:
     ap.add_argument("--out", type=Path,
                     default=base_results / "clip_descriptions.csv")
     ap.add_argument("--milan", default="base")
+    ap.add_argument("--layer-by-layer", action="store_true", default=True)
     ap.add_argument("--device",
                     default="cuda" if torch.cuda.is_available() else "cpu")
     args = ap.parse_args()
 
-    run(args.dissect_dir, args.out, milan_key=args.milan, device=args.device)
+    run(args.dissect_dir, args.out, milan_key=args.milan, device=args.device,
+        layer_by_layer=args.layer_by_layer)
 
 
 if __name__ == "__main__":

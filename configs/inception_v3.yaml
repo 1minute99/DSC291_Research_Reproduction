@@ -1,0 +1,41 @@
+# InceptionV3 training config for the spurious-text experiment.
+#
+# Extension experiment (proposal Section 2.1, "New experiments"): test whether
+# MILAN generalises beyond ResNet18 to a deeper, multi-branch architecture.
+#
+# Same optimiser/schedule as configs/resnet18_appendixE.yaml so the only thing
+# that changes is the architecture. Two InceptionV3-specific differences:
+#   * image_size = 299  (InceptionV3's native input resolution)
+#   * aux_logits        (the auxiliary classifier head, used during training)
+
+model:
+  arch: inception_v3
+  num_classes: 10               # Imagenette / 10-class ImageNet
+  pretrained: false             # train from scratch
+  aux_logits: true              # InceptionV3 auxiliary head
+  aux_weight: 0.4               # standard weight on the aux loss term
+
+data:
+  image_size: 299               # InceptionV3 expects 299x299 (vs 224 for ResNet18)
+  num_workers: 4
+
+train:
+  optimizer: adamw
+  lr: 1.0e-4
+  weight_decay: 0.0
+  batch_size: 64                # smaller than ResNet18's 128: 299px uses ~1.8x memory
+  max_epochs: 100
+  patience: 12                   # early-stop on val loss
+  hold_out: 0.1                 # fraction of train held out for val
+  seed: 0
+
+text_overlay:
+  # Identical spurious-text scheme to the ResNet18 run so results are comparable.
+  train_fraction: 0.5
+  test_fraction: 1.0
+  font_size: 24
+  font_color: [255, 255, 255]   # white text
+  stripe_color: [0, 0, 0]       # black stripe
+  stripe_alpha: 160             # 0=transparent, 255=opaque
+  position: top_left            # corner placement
+  margin_px: 4

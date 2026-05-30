@@ -24,7 +24,8 @@ from tqdm.auto import tqdm
 
 from milan_repro.editing.ablate import Unit, channels_zeroed
 from milan_repro.milan_glue import upstream  # noqa: F401
-from milan_repro.milan_glue.register import load_trained
+from milan_repro.milan_glue.register import (DEFAULT_ARCH, image_size_for,
+                                              load_trained)
 from milan_repro.data.spurious_dataset import load as load_spurious
 
 from src import milannotations
@@ -76,17 +77,24 @@ def per_unit_importance(model: nn.Module, dissected: milannotations.TopImagesDat
 
 def run(version_dir: Path, ckpt_path: Path, dissect_dir: Path,
         descriptions_csv: Path, out_csv: Path,
+        arch: str = DEFAULT_ARCH,
         n_random_trials: int = 5,
         ablation_min: int = 0, ablation_max: int = 50,
         ablation_step: int = 1,
         hold_out_seed: int = 0, hold_out_frac: float = 0.1,
         batch_size: int = 128, num_workers: int = 4,
+        image_size: int = None,
         device: str = "cuda") -> Path:
     """Drive the editing experiment end-to-end. Writes `out_csv`."""
     out_csv.parent.mkdir(parents=True, exist_ok=True)
 
+    # Inputs must be the arch's native resolution (224 ResNet18 / 299 Inception);
+    # feeding 224 to Inception would silently corrupt every accuracy here.
+    if image_size is None:
+        image_size = image_size_for(arch)
+
     # Datasets.
-    train_full, test_set = load_spurious(version_dir)
+    train_full, test_set = load_spurious(version_dir, image_size=image_size)
 
     # Reproduce a deterministic train/val split (matches train script).
     g = torch.Generator().manual_seed(hold_out_seed)
@@ -100,7 +108,7 @@ def run(version_dir: Path, ckpt_path: Path, dissect_dir: Path,
                              num_workers=num_workers, pin_memory=True)
 
     # Model.
-    model = load_trained(ckpt_path, device=device)
+    model = load_trained(ckpt_path, arch=arch, device=device)
 
     # Dissected units (so we can index by unit_index across layers).
     dissected = milannotations.TopImagesDataset(dissect_dir)
@@ -113,8 +121,11 @@ def run(version_dir: Path, ckpt_path: Path, dissect_dir: Path,
     candidate_indices = desc_df.index[desc_df["is_text_neuron"]].tolist()
     print(f"{len(candidate_indices)} text-neuron candidates")
 
-    # Per-unit clean-val accuracy under independent ablation.
-    importance_cache = out_csv.parent / "importance.csv"
+    # Per-unit clean-val accuracy under independent ablation. Keep the cache
+    # arch-specific so a different model's (differently-sized) cache is never
+    # reused; ResNet18 keeps the documented `importance.csv` name.
+    imp_suffix = "" if arch == DEFAULT_ARCH else f"_{arch}"
+    importance_cache = out_csv.parent / f"importance{imp_suffix}.csv"
     scores = per_unit_importance(model, dissected, val_loader, device,
                                  importance_cache)
 
@@ -160,31 +171,42 @@ def run(version_dir: Path, ckpt_path: Path, dissect_dir: Path,
 
 
 def main() -> None:
+    from milan_repro.milan_glue.register import ARCHES
+
     ap = argparse.ArgumentParser()
     base_data = Path(os.environ.get("MILAN_DATA_DIR", "./data"))
     base_models = Path(os.environ.get("MILAN_MODELS_DIR", "./models"))
     base_results = Path(os.environ.get("MILAN_RESULTS_DIR", "./results"))
+    ap.add_argument("--arch", choices=ARCHES, default=DEFAULT_ARCH)
     ap.add_argument("--version-dir", type=Path,
                     default=base_data / "imagenet-spurious-text" / "50pct")
-    ap.add_argument("--ckpt", type=Path,
-                    default=base_models / "resnet18_spurious.pth")
-    ap.add_argument("--dissect-dir", type=Path,
-                    default=base_results / "edit" / "imagenet-spurious-text"
-                            / "resnet18_spurious-50pct")
-    ap.add_argument("--descriptions", type=Path,
-                    default=base_results / "descriptions.csv")
-    ap.add_argument("--out", type=Path,
-                    default=base_results / "ablation_curve.csv")
+    # Defaults for the arch-specific paths are resolved after parsing --arch.
+    ap.add_argument("--ckpt", type=Path, default=None)
+    ap.add_argument("--dissect-dir", type=Path, default=None)
+    ap.add_argument("--descriptions", type=Path, default=None)
+    ap.add_argument("--out", type=Path, default=None)
     ap.add_argument("--n-random-trials", type=int, default=5)
     ap.add_argument("--ablation-max", type=int, default=50)
     ap.add_argument("--ablation-step", type=int, default=1)
+    ap.add_argument("--image-size", type=int, default=None,
+                    help="override model input size (defaults to arch native)")
     ap.add_argument("--device",
                     default="cuda" if torch.cuda.is_available() else "cpu")
     args = ap.parse_args()
-    run(args.version_dir, args.ckpt, args.dissect_dir, args.descriptions,
-        args.out,
+
+    suffix = "" if args.arch == DEFAULT_ARCH else f"_{args.arch}"
+    ckpt = args.ckpt or base_models / f"{args.arch}_spurious.pth"
+    dissect = args.dissect_dir or (base_results / "edit"
+                                   / "imagenet-spurious-text"
+                                   / f"{args.arch}_spurious-50pct")
+    descriptions = args.descriptions or base_results / f"descriptions{suffix}.csv"
+    out = args.out or base_results / f"ablation_curve{suffix}.csv"
+
+    run(args.version_dir, ckpt, dissect, descriptions, out,
+        arch=args.arch,
         n_random_trials=args.n_random_trials,
         ablation_max=args.ablation_max, ablation_step=args.ablation_step,
+        image_size=args.image_size,
         device=args.device)
 
 

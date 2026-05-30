@@ -61,6 +61,13 @@ python -m milan_repro.figures.plot_fig8
 
 …or run the notebooks under `notebooks/` cell-by-cell.
 
+### Extensions
+
+- **InceptionV3** (architecture-generalization extension): the same four stages
+  run with an `--arch inception_v3` switch. See
+  [`docs/inception_v3_experiment.md`](docs/inception_v3_experiment.md) for the
+  full command-by-command walkthrough, or run notebooks `05`–`07`.
+
 ## What gets produced
 
 | File | What it is |

@@ -1,0 +1,5 @@
+# pip constraints for installing on Python 3.8 / Apple Silicon (arm64).
+# milan/requirements.in leaves spacy unpinned; modern pip otherwise resolves a
+# too-new spacy whose build chain (thinc -> blis) requires numpy>=2.0, which has
+# no Python 3.8 build. 3.7.x is the last spacy line shipping py3.8 wheels.
+spacy<3.8

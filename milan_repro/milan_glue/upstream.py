@@ -21,6 +21,26 @@ try:
 except ImportError:
     pass
 
+# torch >= 2.6 flips `torch.load`'s default to `weights_only=True`, which refuses
+# to unpickle MILAN's decoder checkpoints (they embed non-tensor objects like
+# `thinc.config.Config` from the spaCy/thinc stack). These are trusted files, so
+# restore the permissive default. We only set a *default*, so any caller passing
+# `weights_only=True` explicitly is still honoured. Idempotent and harmless on
+# older torch (where the default was already False).
+try:
+    import torch as _torch
+    if not getattr(_torch.load, "_milan_weights_only_patched", False):
+        _orig_torch_load = _torch.load
+
+        def _patched_torch_load(*args, **kwargs):
+            kwargs.setdefault("weights_only", False)
+            return _orig_torch_load(*args, **kwargs)
+
+        _patched_torch_load._milan_weights_only_patched = True
+        _torch.load = _patched_torch_load
+except ImportError:
+    pass
+
 _HERE = Path(__file__).resolve()
 _MILAN_DIR = _HERE.parents[2] / "milan"
 _SHIMS_DIR = _HERE.parents[1] / "_shims"

@@ -28,7 +28,23 @@ from milan_repro.milan_glue.register import (DEFAULT_ARCH, image_size_for,
                                               load_trained)
 from milan_repro.data.spurious_dataset import load as load_spurious
 
-from src import milannotations
+class _UnitIndex:
+    """Lightweight replacement for TopImagesDataset when only unit() is needed.
+
+    Reads layer/channel from the descriptions CSV instead of loading all
+    exemplar images into memory.
+    """
+
+    def __init__(self, descriptions_csv: Path) -> None:
+        df = pd.read_csv(descriptions_csv).sort_values("unit_index").reset_index(drop=True)
+        self._layers: List[str] = df["layer"].tolist()
+        self._channels: List[int] = df["channel"].tolist()
+
+    def unit(self, i: int):
+        return (self._layers[i], self._channels[i])
+
+    def __len__(self) -> int:
+        return len(self._layers)
 
 
 @torch.no_grad()
@@ -110,8 +126,8 @@ def run(version_dir: Path, ckpt_path: Path, dissect_dir: Path,
     # Model.
     model = load_trained(ckpt_path, arch=arch, device=device)
 
-    # Dissected units (so we can index by unit_index across layers).
-    dissected = milannotations.TopImagesDataset(dissect_dir)
+    # Unit index (layer, channel) from descriptions CSV — no image loading needed.
+    dissected = _UnitIndex(descriptions_csv)
 
     # Text neurons (from MILAN descriptions).
     desc_df = pd.read_csv(descriptions_csv)

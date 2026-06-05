@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 
 
-def plot(ablation_csv: Path, out_path: Path) -> Path:
+def plot(ablation_csv: Path, out_path: Path, title: str = None) -> Path:
     df = pd.read_csv(ablation_csv)
 
     baseline = df[df["mode"] == "baseline"].iloc[0]
@@ -48,7 +48,8 @@ def plot(ablation_csv: Path, out_path: Path) -> Path:
 
     ax.set_xlabel("# neurons ablated")
     ax.set_ylabel("adversarial test accuracy")
-    ax.set_title("ResNet18 robustness vs. ablation (MILAN Section 7 reproduction)")
+    ax.set_title(title or
+                 "Robustness vs. ablation (MILAN Section 7 reproduction)")
     ax.legend(loc="lower right", fontsize=9)
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
@@ -66,8 +67,10 @@ def main() -> None:
                     default=base_results / "ablation_curve.csv")
     ap.add_argument("--out", type=Path,
                     default=base_results / "figs" / "fig8.pdf")
+    ap.add_argument("--title", default=None,
+                    help="plot title (defaults to a generic Section-7 title)")
     args = ap.parse_args()
-    plot(args.ablation_csv, args.out)
+    plot(args.ablation_csv, args.out, title=args.title)
 
 
 if __name__ == "__main__":

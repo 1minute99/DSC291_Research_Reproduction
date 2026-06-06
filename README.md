@@ -8,6 +8,10 @@ Paper: <https://arxiv.org/abs/2201.11114> · Upstream code: <https://github.com/
 
 Group: Wonmin Kim, Seongho Kim, Ming-Yang Wu, Steven Tsai.
 
+> **New here?** Start with [`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md) — a
+> plain-language, figure-by-figure tour of the whole project. This README is the
+> code-level reference (structure, fixes, exact commands).
+
 ---
 
 ## Table of Contents

@@ -16,6 +16,11 @@ from pathlib import Path
 try:
     import pkg_resources
     import packaging as _packaging
+    # Modern `packaging` does not auto-import its submodules, but OpenAI CLIP's
+    # pinned code does `import packaging; packaging.version.parse(...)`. Load the
+    # submodules so the `.version`/`.specifiers` attributes exist.
+    import packaging.version  # noqa: F401
+    import packaging.specifiers  # noqa: F401
     if not hasattr(pkg_resources, "packaging"):
         pkg_resources.packaging = _packaging
 except ImportError:
@@ -38,6 +43,17 @@ try:
 
         _patched_torch_load._milan_weights_only_patched = True
         _torch.load = _patched_torch_load
+except ImportError:
+    pass
+
+# Pillow >= 10 removed the private helper `PIL.Image.isImageType`, which the
+# pinned netdissect image-saver (`milan/src/deps/netdissect/imgsave.py`) still
+# calls while dumping exemplar visualisations. It is just an isinstance check,
+# so restore it. Idempotent and harmless on older Pillow.
+try:
+    import PIL.Image as _PILImage
+    if not hasattr(_PILImage, "isImageType"):
+        _PILImage.isImageType = lambda t: isinstance(t, _PILImage.Image)
 except ImportError:
     pass
 

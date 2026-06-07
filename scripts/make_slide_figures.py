@@ -40,12 +40,26 @@ def _pick_image(folder: Path) -> Path:
 
 
 def make_spurious_grid():
+    import pandas as pd
     rng = random.Random(42)
     chosen_wnids = rng.sample(list(CLASS_NAMES.keys()), 4)
 
+    ver = ROOT / "data" / "imagenet-spurious-text" / "10pct"
     clean_root = ROOT / "data" / "imagenette" / "imagenette2-320" / "train"
-    spurious_train_root = ROOT / "data" / "imagenet-spurious-text" / "50pct" / "train"
-    adv_root = ROOT / "data" / "imagenet-spurious-text" / "50pct" / "test_strict"
+    adv_root = ver / "test"  # every test image carries a wrong-class overlay
+    man = pd.read_csv(ver / "manifest.csv")
+    # the 10% train set has only 10% overlaid images, so pick guaranteed-overlaid
+    # examples for the training row via the manifest
+    overlaid = man[(man["split"] == "train")
+                   & (man["overlay_text"].fillna("").astype(str).str.len() > 0)]
+
+    def pick(r, wnid):
+        if r == 0:
+            return _pick_image(clean_root / wnid)
+        if r == 1:
+            sub = overlaid[overlaid["class"] == wnid]
+            return Path(sub.iloc[len(sub) // 2]["out_path"]) if len(sub) else None
+        return _pick_image(adv_root / wnid)
 
     fig, axes = plt.subplots(3, 4, figsize=(10, 7.5))
     row_titles = [
@@ -53,12 +67,11 @@ def make_spurious_grid():
         "Training set\n— class-name overlay",
         "Adversarial test\n(wrong-class overlay)",
     ]
-    for r, root in enumerate([clean_root, spurious_train_root, adv_root]):
+    for r in range(3):
         for c, wnid in enumerate(chosen_wnids):
             ax = axes[r][c]
-            folder = root / wnid
-            img_path = _pick_image(folder)
-            if img_path is None:
+            img_path = pick(r, wnid)
+            if img_path is None or not Path(img_path).exists():
                 ax.axis("off")
                 continue
             img = Image.open(img_path).convert("RGB")
@@ -74,17 +87,17 @@ def make_spurious_grid():
                  fontsize=13, y=0.995)
     plt.tight_layout(rect=(0.08, 0, 1, 0.97))
     out = OUT / "spurious_dataset_grid.png"
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"saved {out}")
 
 
 def make_arch_bar():
-    archs = ["ResNet18\n(trained)", "VGG16\n(trained)", "InceptionV3\n(trained)*", "CLIP ViT-B/32\n(zero-shot)"]
-    fracs = [21.1, 24.3, None, 7.9]
-    n_total = [1024, 1472, "~3936", 768]
-    n_text = [216, 357, "—", 61]
-    colors = ["#1f77b4", "#ff7f0e", "#bcbd22", "#2ca02c"]
+    archs = ["ResNet18\n(trained)", "VGG16\n(trained)", "CLIP ViT-B/32\n(zero-shot)"]
+    fracs = [21.1, 24.3, 7.9]
+    n_total = [1024, 1472, 768]
+    n_text = [216, 357, 61]
+    colors = ["#1f77b4", "#ff7f0e", "#2ca02c"]
 
     fig, ax = plt.subplots(figsize=(8, 5.2))
     x = list(range(len(archs)))
@@ -102,7 +115,7 @@ def make_arch_bar():
     ax.set_xticks(x)
     ax.set_xticklabels(archs, fontsize=10)
     ax.set_ylabel("Text-selective neuron fraction (%)", fontsize=11)
-    ax.set_ylim(0, 70)
+    ax.set_ylim(0, 32)
     ax.set_title("Text-neuron fraction across architectures\n(higher = more reliance on text shortcut)",
                  fontsize=12)
     ax.axhline(0, color="black", linewidth=0.5)
@@ -110,36 +123,36 @@ def make_arch_bar():
     ax.spines[["top", "right"]].set_visible(False)
     plt.tight_layout()
     out = OUT / "arch_text_neuron_bar.png"
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"saved {out}")
 
 
 def make_summary_table():
     rows = [
-        ["Baseline reproduction (ResNet18)",
-         "75.4%", "51.5%", "216 / 1024 (21.1%)",
-         "Text-editing recovers robustness"],
-        ["Exp 1 — VGG16 generalization",
-         "69.0%", "19.8%", "357 / 1472 (24.3%)",
-         "More reliant on shortcut"],
-        ["Exp 2 — ResNet18 layer-depth",
+        ["Baseline reproduction\n(ResNet18)",
+         "75.4%", "51.5%", "216 / 1024\n(21.1%)",
+         "Editing recovers\nrobustness"],
+        ["Exp 1 — VGG16\ngeneralization",
+         "69.0%", "19.8%", "357 / 1472\n(24.3%)",
+         "More reliant on\nshortcut"],
+        ["Exp 2 — ResNet18\nlayer-depth",
          "—", "—", "9→27→37→77→66",
-         "Peaks at layer1 (3.0×), then declines"],
-        ["Exp 3 — CLIP ViT-B/32 (zero-shot)",
-         "—", "—", "61 / 768 (7.9% max)",
+         "Peaks at layer1 (3.0×),\nthen declines"],
+        ["Exp 3 — CLIP ViT-B/32\n(zero-shot)",
+         "—", "—", "61 / 768\n(7.9% max)",
          "≈2.7× more robust"],
     ]
-    cols = ["Experiment", "Clean val", "Adv test", "Text neurons", "Key finding"]
+    cols = ["Experiment", "Clean\nval", "Adv\ntest", "Text neurons", "Key finding"]
 
-    fig, ax = plt.subplots(figsize=(15, 3.6))
+    fig, ax = plt.subplots(figsize=(14, 4.4))
     ax.axis("off")
     table = ax.table(cellText=rows, colLabels=cols,
                      cellLoc="center", colLoc="center", loc="center",
-                     colWidths=[0.27, 0.10, 0.10, 0.22, 0.21])
+                     colWidths=[0.22, 0.08, 0.08, 0.22, 0.30])
     table.auto_set_font_size(False)
     table.set_fontsize(11)
-    table.scale(1, 2.2)
+    table.scale(1, 3.0)
 
     for j in range(len(cols)):
         cell = table[(0, j)]
@@ -155,7 +168,7 @@ def make_summary_table():
     fig.suptitle("Summary of reproduction + extensions",
                  fontsize=14, y=0.98)
     out = OUT / "summary_metrics_table.png"
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"saved {out}")
 
@@ -205,7 +218,7 @@ def make_pipeline_diagram():
             ha="center", va="center", fontsize=10, style="italic", color="#555555")
 
     out = OUT / "milan_pipeline_diagram.png"
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"saved {out}")
 

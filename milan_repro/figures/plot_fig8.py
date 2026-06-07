@@ -54,7 +54,7 @@ def plot(ablation_csv: Path, out_path: Path, title: str = None) -> Path:
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, dpi=180, bbox_inches="tight")
+    fig.savefig(out_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"wrote {out_path}")
     return out_path

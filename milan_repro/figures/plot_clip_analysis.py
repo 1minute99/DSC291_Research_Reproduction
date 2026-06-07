@@ -117,8 +117,8 @@ def plot(descriptions_csv: Path, out_dir: Path) -> None:
     fig.tight_layout()
 
     out_path = out_dir / "fig_clip_analysis.pdf"
-    fig.savefig(out_path, dpi=180, bbox_inches="tight")
-    fig.savefig(out_dir / "fig_clip_analysis.png", dpi=150, bbox_inches="tight")
+    fig.savefig(out_path, dpi=300, bbox_inches="tight")
+    fig.savefig(out_dir / "fig_clip_analysis.png", dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"wrote {out_path}")
 

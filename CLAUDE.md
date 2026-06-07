@@ -31,6 +31,7 @@ Team: Wonmin Kim, Seongho Kim, Ming-Yang Wu, Steven Tsai. Presentation date: 202
     ├── build_deck.py                # ★ CURRENT deck builder. Declarative — builds the 32-slide MILAN deck from the template's layouts (sections split across multiple slides + figures/tables, per the example format). Output: "SP 26 DSC 291 MILAN - Research Reproduction .pptx".
     ├── make_slide_figures.py        # Generates 4 slide figures (spurious grid, arch bar, summary table, pipeline). Numbers hardcoded — edit on result changes.
     ├── make_overlay_sweep_figure.py # Overlay-strength sweep panel (50/20/10/5%); kept for reference, no longer on a slide.
+    ├── make_report_pdf.py           # One explained PDF of every figure/result → "MILAN - Figures and Results.pdf".
     ├── run_overlay_experiment.sh    # Full ResNet18 pipeline at any overlay fraction (build→train→exemplars→desc→identify→eval), isolated outputs.
     ├── run_extensions_10pct.sh      # VGG16 + CLIP extension reruns at 10pct.
     └── fill_presentation.py         # OLD 24-slide in-place filler (superseded by build_deck.py; kept for reference).
@@ -73,7 +74,7 @@ Format references (do not edit): `SP 26 DSC 291 Project Template - Research Repr
 - **`milan/` is no longer a submodule**: it lives as plain files in this repo, pinned to upstream commit `19c4d58`. Do not re-add it as a submodule. If you need to pull upstream changes, fetch from `https://github.com/evandez/neuron-descriptions` manually and diff.
 - **CSV schema**: descriptions files are `unit_index, layer, channel, description[, is_text_neuron]`; ablation curves are `mode, trial, n_ablated, clean_acc, adv_acc` where `mode ∈ {baseline, text-sorted, random}`.
 - **Class mapping**: 10 Imagenette synsets in `milan_repro/data/build_splits.py` (`IMAGENETTE_CLASSES`); painted short labels in `SHORT_LABELS`. Don't substitute one for the other.
-- **Adversarial set**: `data/imagenet-spurious-text/50pct/test_strict/` has wrong-class overlay (the adversarial eval); `test/` has the unmodified images.
+- **Adversarial set**: only the **10pct** version remains (legacy 50/20/5pct data, models and results were deleted 2026-06-06). `data/imagenet-spurious-text/10pct/test/` is the adversarial eval — every test image has a wrong-class overlay (100%); `train/` has the 10% correct-overlay shortcut. (There is no `test_strict/`; the old 50pct one is gone.)
 - **Branches**: `main` is the merged branch containing inception-extension + sean-work. Teammate branches (`origin/inception-extension`, `origin/sean-work`) remain on the remote for history.
 
 ## Headline numbers (don't rederive)

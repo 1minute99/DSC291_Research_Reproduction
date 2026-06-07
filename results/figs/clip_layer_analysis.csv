@@ -1,6 +1,6 @@
 block,layer,n_total,n_text,frac_text,top5
-0,visual_transformer_resblocks_0,768,34,0.044270833333333336,"ground, objects, colored, white, designs"
-3,visual_transformer_resblocks_3,768,63,0.08203125,"objects, colored, white, circular, black"
-6,visual_transformer_resblocks_6,768,7,0.009114583333333334,"objects, colored, white, faces, ground"
-9,visual_transformer_resblocks_9,768,14,0.018229166666666668,"objects, colored, white, red, ground"
-11,visual_transformer_resblocks_11,768,76,0.09895833333333333,"objects, colored, white, red, circular"
+0,visual_transformer_resblocks_0,768,24,0.03125,"objects, ground, colored, white, designs"
+3,visual_transformer_resblocks_3,768,39,0.05078125,"objects, colored, white, circular, black"
+6,visual_transformer_resblocks_6,768,3,0.00390625,"objects, colored, white, faces, red"
+9,visual_transformer_resblocks_9,768,9,0.01171875,"objects, colored, white, red, ground"
+11,visual_transformer_resblocks_11,768,61,0.07942708333333333,"objects, colored, white, red, circular"

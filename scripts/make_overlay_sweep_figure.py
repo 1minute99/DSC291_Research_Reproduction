@@ -69,7 +69,7 @@ def main() -> None:
     fig.tight_layout()
     out = RES / "figs" / "slides" / "overlay_sweep.png"
     out.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out, dpi=180, bbox_inches="tight")
+    fig.savefig(out, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"wrote {out}")
 

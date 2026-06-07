@@ -69,8 +69,8 @@ def plot(csv_paths: list[Path], labels: list[str], out_path: Path) -> Path:
     fig.tight_layout()
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, dpi=180, bbox_inches="tight")
-    fig.savefig(out_path.with_suffix(".png"), dpi=150, bbox_inches="tight")
+    fig.savefig(out_path, dpi=300, bbox_inches="tight")
+    fig.savefig(out_path.with_suffix(".png"), dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"wrote {out_path}")
     return out_path

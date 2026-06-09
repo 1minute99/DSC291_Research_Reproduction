@@ -1,0 +1,6 @@
+model / dataset,DnD,MILAN,NetDissect
+"resnet50 / imagenet (fc, n=1000)",0.195,0.122,0.169
+resnet18 / places365 (fc),no data,no fc layer,1 method only
+alexnet / any,no data,no data,no data
+resnet18 / imagenet,no data,no data,no data
+resnet50 / places365,no data,no data,no data
